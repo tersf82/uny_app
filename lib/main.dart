@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: RepositoryProvider(
-        create: (context) => UserRepository(),
+        create: (context) => CommentRepository(),
         child: ProfilPage(),
       ),
     );

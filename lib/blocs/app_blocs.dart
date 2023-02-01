@@ -7,14 +7,14 @@ import 'app_states.dart';
 
 
 class CommentBloc extends Bloc<CommentEvent, CommentState> {
-  final UserRepository _userRepository;
+  final CommentRepository _commentRepository;
 
-  CommentBloc(this._userRepository) : super(UserLoadingState()) {
+  CommentBloc(this._commentRepository) : super(CommentLoadingState()) {
     on<CommentUserEvent> ((event, emit) async {
-      emit(UserLoadingState());
+      emit(CommentLoadingState());
 
       try{
-        final comments = await _userRepository.getComments();
+        final comments = await _commentRepository.getComments();
         emit(CommentLoadedState(comments));
       }catch (e) {
         emit(CommentErrorState(e.toString()));

@@ -1,4 +1,4 @@
-
+import 'package:flutter/material.dart';
 class User {
   final int id;
   final String name;
@@ -46,6 +46,7 @@ class Characteristic {
   final int id;
   final String title;
   final String emoji;
+  late Color backgroundColor = Colors.grey.shade200;
 
   Characteristic(
       {required this.id,

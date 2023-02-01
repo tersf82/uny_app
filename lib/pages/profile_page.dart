@@ -8,6 +8,7 @@ import 'package:percent_indicator/circular_percent_indicator.dart';
 import '../blocs/app_blocs.dart';
 import '../blocs/app_events.dart';
 import '../blocs/app_states.dart';
+import '../blocs/slider_bloc.dart';
 import '../models/models.dart';
 import '../repos/repositories.dart';
 import '../slider/slider_color.dart';
@@ -20,10 +21,10 @@ class ProfilPage extends StatefulWidget {
 }
 
 class _ProfilPageState extends State<ProfilPage> {
-  final _scaffoldKeyforBottomSheet =
-      GlobalKey<ScaffoldState>(); // for bottom sheet
+  final _scaffoldKeyforBottomSheet = GlobalKey<ScaffoldState>(); // for bottom sheet
   final myController = TextEditingController(); // for comment text
-  final List<Characteristic> mockCharacteristics = [
+
+  List<Characteristic> mockCharacteristics = [
     Characteristic(id: 1, title: 'Компетентный сотрудник', emoji: '\u{1F4BC}'),
     Characteristic(id: 2, title: 'Лучший друг', emoji: '\u{1F61C}'),
     Characteristic(id: 3, title: 'Открытый', emoji: '\u{1F60A}'),
@@ -36,16 +37,18 @@ class _ProfilPageState extends State<ProfilPage> {
     Characteristic(id: 10, title: 'Сплетничает', emoji: '\u{1F3A4}'),
   ];
   late User mockUser;
-
-  List<String> tagChips = []; // selected
-  List<String> optionChips = []; // all chips
-  double sliderValue = 5; //initial slider value
+  late List<Characteristic> _filtersCharacteristics; //for chips
   int profileStar = 5;
-  bool is5star = false; // if profileStar 5 star then green color
+  bool is5star = false; // if profileStar 5 then green color
+  double ratingValue = 0;
+  double currentRatingValue = 8;
+  bool isCommentAdded = false;
+  late CommentModel commentModel;
 
   @override
   void initState() {
     super.initState();
+    _filtersCharacteristics = <Characteristic>[];
     mockUser = User(
       id: 1,
       name: 'Антон Дегтярёв',
@@ -62,15 +65,13 @@ class _ProfilPageState extends State<ProfilPage> {
       },
       reviews: [],
     );
-    for (int i = 0; i < 7; i++) {
-      optionChips.add(
-          mockCharacteristics[i].title + ' ' + mockCharacteristics[i].emoji);
-    }
   }
+
+  bool isChipsExpanded = false;
 
   @override
   Widget build(BuildContext context) {
-    final DateTime now = DateTime.now();
+    final DateTime now = DateTime.now(); // for to add comment manually
     final DateFormat formatter = DateFormat('yyyy-MM-dd');
     final String dateNow = formatter.format(now);
     final double width = MediaQuery.of(context).size.width;
@@ -81,7 +82,7 @@ class _ProfilPageState extends State<ProfilPage> {
   BlocProvider<CommentBloc> buildBlocProvider(String dateNow, double width) {
     return BlocProvider(
       create: (context) => CommentBloc(
-        RepositoryProvider.of<UserRepository>(context),
+        RepositoryProvider.of<CommentRepository>(context),
       )..add(CommentUserEvent()),
       child: Scaffold(
           resizeToAvoidBottomInset: false,
@@ -91,7 +92,7 @@ class _ProfilPageState extends State<ProfilPage> {
     );
   }
 
-  Container profile(String dateNow, double width) {
+  Widget profile(String dateNow, double width) {
     return Container(
       child: SingleChildScrollView(
         child: Column(
@@ -104,12 +105,9 @@ class _ProfilPageState extends State<ProfilPage> {
                 Icon(
                   Icons.arrow_back,
                   color: Colors.transparent,
-                )),
-            Container(
-              color: Colors.white,
-              height: 200,
-              child: chipMethod(),
-            ),
+                ),
+                currentRatingValue),
+            chipMethod(ignoring: true),
             SizedBox(
               height: 20,
             ),
@@ -132,11 +130,16 @@ class _ProfilPageState extends State<ProfilPage> {
                     ),
                   )),
               onPressed: () {
-                _scaffoldKeyforBottomSheet.currentState!.showBottomSheet(
-                    constraints:
-                        const BoxConstraints(minWidth: double.infinity),
-                    elevation: 20, (context) {
-                  return bottomSheet();
+                //  goToBottomSheet();
+                showModalBottomSheet(
+                    isScrollControlled: true,
+                    context: context,
+                    builder: (context) => bottomSheet()).then((value) {
+                  var newRating = value["sliderValue"];
+                  commentModel = value["commentModel"];
+                  isCommentAdded = value["isCommentAdded"];
+                  currentRatingValue = (newRating + currentRatingValue) / 2;
+                  setState(() {});
                 });
               },
               child: Container(
@@ -164,23 +167,25 @@ class _ProfilPageState extends State<ProfilPage> {
                 height: 300,
                 child: BlocBuilder<CommentBloc, CommentState>(
                   builder: (context, state) {
-                    if (state is UserLoadingState) {
+                    if (state is CommentLoadingState) {
                       return Center(
                         child: CircularProgressIndicator(),
                       );
                     }
+
                     int i = 0;
                     if (state is CommentLoadedState) {
                       List<CommentModel> commentList = state.comments;
-                      while (i < 20) {
-                        i++;
-                        mockUser.reviews.add(commentList[i]);
-                      }
 
+                      if (isCommentAdded) {
+                        commentList.insert(0, commentModel);
+                        print(commentModel.body);
+                        print(commentList[0].body);
+                      }
                       //     print(mockUser.reviews.length);
 
                       return ListView.builder(
-                        itemCount: mockUser.reviews.length,
+                        itemCount: 20, // mockUser.reviews.length,
                         //commentList.length,
                         itemBuilder: (context, index) {
                           if (index == 1 || index == 11) {
@@ -315,142 +320,144 @@ class _ProfilPageState extends State<ProfilPage> {
     );
   }
 
-  StatefulBuilder bottomSheet() {
-    return StatefulBuilder(
-      builder: (context, setState) {
-        return Container(
-          color: Colors.white,
-          height: MediaQuery.of(context).size.height / 10 * 9,
-          child: SizedBox(
-              width: 200,
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    profilePhoto(
-                        'Оставить отзыв',
-                        Text(
-                          '     Отмена',
-                          style: TextStyle(color: Colors.red, fontSize: 16),
-                        ),
-                        Text(
-                          '     Отмена',
-                          style: TextStyle(color: Colors.transparent),
-                        )),
-                    Container(
-                      padding: EdgeInsets.only(right: 20),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
+  Widget bottomSheet() {
+    return Container(
+      color: Colors.white,
+      height: MediaQuery.of(context).size.height / 10 * 9,
+      child: SizedBox(
+          width: 200,
+          child: SingleChildScrollView(
+            child: BlocProvider(
+              create: (context) => SliderBloc(),
+              child: BlocBuilder<SliderBloc, SliderState>(
+                builder: (context, state) {
+                  final model = context.read<SliderBloc>();
+                  double sliderValue = 5;
+                  if (state is SliderInitial) {
+                    sliderValue = state.val;
+                  }
+                  ;
+                  return Column(
+                    children: [
+                      profilePhoto(
+                          // to bottom sheet
+                          'Оставить отзыв',
                           Text(
-                            sliderValue.toInt().toString(),
-                            style: TextStyle(
-                                fontSize: 20,
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold),
+                            '     Отмена',
+                            style: TextStyle(color: Colors.red, fontSize: 16),
                           ),
-                          Text('/10',style: TextStyle(color: Colors.grey),),
-                        ],
-                      ),
-                    ),
-                    SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                            trackShape: GradientRectSliderTrackShape()),
-                        child: Slider(
-                          activeColor: Colors.greenAccent,
-                          min: 0,
-                          max: 10,
-                          divisions: 10,
-                          label: sliderValue.round().toString(),
-                          value: sliderValue,
-                          onChanged: (double val) {
-                            setState(() {
-                              sliderValue = val;
-                            });
-                          },
-                        )),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 20.0, right: 20),
-                      child: TextField(
-                        controller: myController,
-                        maxLines: 3,
-                        decoration: new InputDecoration(
-                            enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                    width: 3, color: Colors.grey.shade200)),
-                            hintText: 'Напишите отзыв'),
-                      ),
-                    ),
-                    ChipsChoice<String>.multiple(
-                      value: tagChips,
-                      onChanged: (val) => setState(() {
-                        tagChips = val;
-                        //  print(val);
-                      }),
-                      choiceItems: C2Choice.listFrom(
-                          source: optionChips,
-                          value: (i, v) {
-                            print(i);
-                            return v;
-                          },
-                          label: (i, v) {
-                            return v;
-                          },
-                          disabled: (i, v) => [0, 2, 5].contains('a')),
-
-                      choiceActiveStyle: C2ChoiceStyle(
-                          color: Colors.red,
-                          borderColor: Colors.green,
-                          borderRadius: BorderRadius.all(Radius.circular(10))),
-                      choiceStyle: C2ChoiceStyle(
-                          color: Colors.blueAccent,
-                          borderRadius: BorderRadius.all(Radius.circular(10))),
-                      wrapped: true,
-
-                      // choiceStyle: choiceStyle
-                    ),
-                    InkWell(
-                      onTap: () {
-                       Navigator.pop(context);
-
-
-                      },
-                      child: Container(
-                        height: 40,
-                        width: 300,
-                        decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            color: Color(0xff910AFB)),
+                          Text(
+                            '     Отмена',
+                            style: TextStyle(color: Colors.transparent),
+                          ),
+                          sliderValue),
+                      Container(
+                        padding: EdgeInsets.only(right: 20),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             Text(
-                              'Опубликовать',
-                              style: TextStyle(color: Colors.white),
+                              sliderValue.toInt().toString(),
+                              style: TextStyle(
+                                  fontSize: 20,
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              '/10',
+                              style: TextStyle(color: Colors.grey),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    Column(
-                      children: [
-                        SizedBox(
-                          height: 5,
+                      SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                              trackShape: GradientRectSliderTrackShape()),
+                          child: Slider(
+                            activeColor: Colors.greenAccent,
+                            min: 0,
+                            max: 10,
+                            divisions: 10,
+                            label: sliderValue.round().toString(),
+                            value: sliderValue,
+                            onChanged: (double val) {
+                              model.add(OnSliderChange(val: val));
+                              setState(() {
+                                //   sliderValue = val;
+                              });
+                            },
+                          )),
+                      chipMethod(ignoring: false), // bottomSheet
+                      Padding(
+                        padding: const EdgeInsets.only(
+                            left: 20.0, right: 20, bottom: 10),
+                        child: TextField(
+                          controller: myController,
+                          maxLines: 3,
+                          decoration: new InputDecoration(
+                              enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                      width: 3, color: Colors.grey.shade200)),
+                              hintText: 'Напишите отзыв'),
                         ),
-                        Text('Нажимая "Опубликовать", вы подтверждаете'),
-                        Text('согласие с условиями использования Uny',
-                            style: TextStyle(color: Colors.blue))
-                      ],
-                    ),
-                  ],
-                ),
-              )),
-        );
-      },
+                      ),
+
+                      InkWell(
+                        onTap: () {
+                          CommentModel commentModel = CommentModel(
+                            id: 01,
+                            email: 'mutlu@email.com',
+                            name: 'Mtl',
+                            postId: 01,
+                            body: myController.text,
+                          );
+                          Map<String, dynamic> myData = new Map();
+                          myData["sliderValue"] = sliderValue;
+                          myData["commentModel"] = commentModel;
+                          myData["isCommentAdded"] = true;
+                          // Navigator.pop(context, sliderValue, commentModel);
+                          selectChips();
+
+                          Navigator.pop(context, myData);
+                        },
+                        child: Container(
+                          height: 40,
+                          width: 300,
+                          decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              color: Color(0xff910AFB)),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Опубликовать',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Column(
+                        children: [
+                          SizedBox(
+                            height: 5,
+                          ),
+                          Text('Нажимая "Опубликовать", вы подтверждаете'),
+                          Text('согласие с условиями использования Uny',
+                              style: TextStyle(color: Colors.blue))
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          )),
     );
   }
 
-  Widget profilePhoto(
-      String profileText, Widget widgetVisible, Widget widgetInvisible) {
+  Widget profilePhoto(String profileText, Widget widgetVisible,
+      Widget widgetInvisible, double sliderValue) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -495,7 +502,7 @@ class _ProfilPageState extends State<ProfilPage> {
                       radius: 80,
                       lineWidth: 15.0,
                       percent: sliderValue / 10,
-                      center: new Text("75%",
+                      center: new Text("",
                           style: TextStyle(color: Color(0xFF535355))),
                       linearGradient: LinearGradient(
                           begin: Alignment.topRight,
@@ -524,8 +531,9 @@ class _ProfilPageState extends State<ProfilPage> {
                     style: TextStyle(color: Colors.white, fontSize: 14),
                     children: [
                       TextSpan(
-                          text:
-                              ((mockUser.rating + sliderValue) / 2).toString()),
+                          text: sliderValue is int
+                              ? sliderValue.toInt.toString()
+                              : sliderValue.toString()),
                       WidgetSpan(
                         child: Icon(
                           Icons.star,
@@ -548,33 +556,102 @@ class _ProfilPageState extends State<ProfilPage> {
     );
   }
 
-  Widget chipMethod() {
-    return ChipsChoice<String>.multiple(
-      clipBehavior: Clip.none,
+  Widget chipMethod({ignoring}) {
+    List<Widget> listCharacteristicWidgetsAll = characteristicWidgets.toList();
+    List<Widget> listCharacteristicWidgetsFirst = [
+      listCharacteristicWidgetsAll[0],
+      listCharacteristicWidgetsAll[1],
+      listCharacteristicWidgetsAll[2],
+      listCharacteristicWidgetsAll[3]
+    ];
+    int showMore = listCharacteristicWidgetsAll.length -
+        listCharacteristicWidgetsFirst.length;
+    return StatefulBuilder(builder: (context, setState) {
+      return Column(
+        children: [
+          IgnorePointer(
+            ignoring: ignoring, // restrict touch in profile screen
+            child: Wrap(
+              clipBehavior: Clip.none,
+              children: isChipsExpanded
+                  ? listCharacteristicWidgetsAll
+                  : listCharacteristicWidgetsFirst,
+            ),
+          ),
+          TextButton(
+              onPressed: () {
+                setState(() {
+                  isChipsExpanded = !isChipsExpanded;
+                });
+              },
+              child: isChipsExpanded
+                  ? Text('Меньше')
+                  : Text('Показать еще ($showMore)'))
+        ],
+      );
+    });
+  }
 
-      value: tagChips,
-      onChanged: (val) => setState(() {
-       // tagChips = val;
-      }),
-      choiceItems: C2Choice.listFrom(
-        source: optionChips,
-        value: (i, v) {
-          return v;
-        },
-        label: (i, v) {
-          return v;
-        },
-      ),
-      choiceActiveStyle: C2ChoiceStyle(
-          color: Colors.red,
-          borderColor: Colors.green,
-          borderRadius: BorderRadius.all(Radius.circular(10))),
-      choiceStyle: C2ChoiceStyle(
-          color: Colors.blueAccent,
-          borderRadius: BorderRadius.all(Radius.circular(10))),
-      wrapped: true,
+  Iterable<Widget> get characteristicWidgets sync* {
+    int i = 0;
+    for (Characteristic characteristic in mockCharacteristics) {
+      String title = characteristic.title.toString();
+      int qty = mockUser.characteristics[characteristic] == null
+          ? 0
+          : mockUser.characteristics[characteristic];
+      String StringQty = qty.toString();
+      ;
+      if (qty >= 30) {
+        mockCharacteristics[i].backgroundColor = Colors.greenAccent;
+        print(i.toString());
+      }
+      if (qty >= 50) {
+        mockCharacteristics[i].backgroundColor = Colors.blueAccent;
+        print(i.toString());
+      }
+      i++;
 
-      // choiceStyle: choiceStyle
-    );
+      yield StatefulBuilder(builder: (context, setState) {
+        return Padding(
+          padding: const EdgeInsets.only(left: 1.0, right: 1),
+          child: FilterChip(
+            clipBehavior: Clip.none,
+            backgroundColor: characteristic.backgroundColor,
+            avatar: CircleAvatar(
+              backgroundColor: Colors.transparent,
+              child: Text(characteristic.emoji),
+            ),
+            label: Text(title + ' ' + StringQty),
+            //    Text(mockUser.characteristics[characteristic]==null?'0':mockUser.characteristics[characteristic].toString() ),
+            selected: _filtersCharacteristics.contains(characteristic),
+            onSelected: (bool selected) {
+              setState(() {
+                if (selected) {
+                  _filtersCharacteristics.add(characteristic);
+                } else {
+                  _filtersCharacteristics.removeWhere((Characteristic i) {
+                    return i == characteristic;
+                  });
+                }
+              });
+            },
+          ),
+        );
+      });
+    }
+  }
+
+  void selectChips() {
+    for (int i = 0; i < _filtersCharacteristics.length; i++) {
+      if (mockUser.characteristics[_filtersCharacteristics[i]] != null) {
+        int v = mockUser.characteristics[_filtersCharacteristics[i]];
+        mockUser.characteristics
+            .update(_filtersCharacteristics[i], (value) => v + 1);
+      } else {
+        mockUser.characteristics.addAll({_filtersCharacteristics[i]: 1});
+      }
+    }
+    _filtersCharacteristics.clear();
+    setState(() {});
   }
 }

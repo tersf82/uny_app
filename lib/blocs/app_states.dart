@@ -3,7 +3,7 @@ import '../models/models.dart';
 
 abstract class CommentState extends Equatable {}
 
-class UserLoadingState extends CommentState {
+class CommentLoadingState extends CommentState {
   @override
   List<Object> get props => [];
 }
