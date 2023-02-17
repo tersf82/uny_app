@@ -1,1 +1,1 @@
-Fetching comments fomr the website =>'https://jsonplaceholder.typicode.com/comments'
+Fetching comments from the website =>'https://jsonplaceholder.typicode.com/comments'
